@@ -1,4 +1,6 @@
-export type InstanceStatus = "idle" | "working" | "waiting" | "error";
+export type InstanceStatus =
+  | { status: "idle" | "working" | "error" }
+  | { status: "waiting"; title: string; message?: string };
 
 export interface Instance {
   id: string;

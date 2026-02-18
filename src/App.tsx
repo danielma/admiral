@@ -4,6 +4,7 @@ import {
   isPermissionGranted,
   requestPermission,
   sendNotification,
+  onAction,
 } from "@tauri-apps/plugin-notification";
 import { Sidebar } from "./components/Sidebar";
 import { Terminal } from "./components/Terminal";
@@ -23,7 +24,10 @@ function App() {
       try {
         const saved = await invoke<Instance[]>("load_instances");
         // Reset status to idle on load (we'll respawn terminals)
-        const withIdleStatus = saved.map((i) => ({ ...i, status: "idle" as InstanceStatus }));
+        const withIdleStatus = saved.map<Instance>((i) => ({
+          ...i,
+          status: { status: "idle" },
+        }));
         setInstances(withIdleStatus);
         if (withIdleStatus.length > 0) {
           setActiveId(withIdleStatus[0].id);
@@ -35,7 +39,7 @@ function App() {
     loadInstances();
   }, []);
 
-  // Request notification permission
+  // Request notification permission and listen for notification clicks
   useEffect(() => {
     const setupNotifications = async () => {
       let granted = await isPermissionGranted();
@@ -44,6 +48,14 @@ function App() {
         granted = permission === "granted";
       }
       setNotificationPermission(granted);
+
+      // Listen for notification clicks
+      await onAction((notification) => {
+        const instanceId = notification.extra?.instanceId as string | undefined;
+        if (instanceId) {
+          setActiveId(instanceId);
+        }
+      });
     };
     setupNotifications();
   }, []);
@@ -86,21 +98,22 @@ function App() {
   const handleStatusChange = useCallback(
     (instanceId: string, status: InstanceStatus) => {
       setInstances((prev) =>
-        prev.map((i) => (i.id === instanceId ? { ...i, status } : i))
+        prev.map((i) => (i.id === instanceId ? { ...i, status } : i)),
       );
 
       // Send notification when an instance needs attention
-      if (status === "waiting" && notificationPermission) {
+      if (status.status === "waiting" && notificationPermission) {
         const instance = instances.find((i) => i.id === instanceId);
         if (instance) {
           sendNotification({
-            title: "Claude needs attention",
-            body: `${instance.name} is waiting for input`,
+            title: status.title,
+            body: status.message || `${instance.name} is waiting for input`,
+            extra: { instanceId: instance.id },
           });
         }
       }
     },
-    [instances, notificationPermission]
+    [instances, notificationPermission],
   );
 
   const handleAddInstance = async (name: string, cwd: string) => {
@@ -109,7 +122,7 @@ function App() {
       id,
       name,
       cwd,
-      status: "idle",
+      status: { status: "idle" },
     };
 
     setInstances((prev) => [...prev, newInstance]);
@@ -123,11 +136,11 @@ function App() {
         cwd,
         command: ["claude"],
       });
-      handleStatusChange(id, "working");
+      handleStatusChange(id, { status: "working" });
       terminalsRef.current.set(id, true);
     } catch (e) {
       console.error("Failed to spawn terminal:", e);
-      handleStatusChange(id, "error");
+      handleStatusChange(id, { status: "error" });
     }
   };
 
@@ -149,10 +162,10 @@ function App() {
 
   const handleTerminalExit = useCallback(
     (instanceId: string) => {
-      handleStatusChange(instanceId, "idle");
+      handleStatusChange(instanceId, { status: "idle" });
       terminalsRef.current.delete(instanceId);
     },
-    [handleStatusChange]
+    [handleStatusChange],
   );
 
   // Spawn terminals for loaded instances
@@ -167,10 +180,10 @@ function App() {
               command: ["claude"],
             });
             terminalsRef.current.set(instance.id, true);
-            handleStatusChange(instance.id, "working");
+            handleStatusChange(instance.id, { status: "working" });
           } catch (e) {
             console.error(`Failed to spawn terminal for ${instance.name}:`, e);
-            handleStatusChange(instance.id, "error");
+            handleStatusChange(instance.id, { status: "error" });
           }
         }
       }

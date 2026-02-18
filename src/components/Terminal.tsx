@@ -38,21 +38,32 @@ export function Terminal({
     onExitRef.current = onExit;
   }, [onExit]);
 
-  const parseOsc777 = useCallback(
-    (data: string): void => {
-      // OSC 777 format from Claude Code: notify;title;message
-      // or just: notify;message
-      const parts = data.split(";");
-      if (parts.length >= 1) {
-        const type = parts[0];
-        if (type === "notify") {
-          // Claude is waiting for input
-          onStatusChangeRef.current("waiting");
+  const parseOsc777 = useCallback((data: string): void => {
+    // OSC 777 format from Claude Code: notify;title;message
+    // or just: notify;message
+    const parts = data.split(";");
+    if (parts.length >= 1) {
+      const [type, ...rest] = parts[0];
+      if (type === "notify") {
+        switch (rest.length) {
+          case 1:
+            onStatusChangeRef.current({ status: "waiting", title: rest[0] });
+            break;
+          case 2:
+            onStatusChangeRef.current({
+              status: "waiting",
+              title: rest[0],
+              message: rest[1],
+            });
+            break;
+          default:
+            throw new Error(
+              `Too many args from claude notification "${JSON.stringify(rest)}`,
+            );
         }
       }
-    },
-    []
-  );
+    }
+  }, []);
 
   useEffect(() => {
     if (!terminalRef.current || xtermRef.current) return;
@@ -116,8 +127,7 @@ export function Terminal({
     const disposeOnData = term.onData(async (data) => {
       try {
         await invoke("write_to_terminal", { id: instanceId, data });
-        // User is typing, Claude is working
-        onStatusChangeRef.current("working");
+        onStatusChangeRef.current({ status: "working" });
       } catch (e) {
         console.error("Failed to write to terminal:", e);
       }
@@ -129,7 +139,7 @@ export function Terminal({
         `pty-output-${instanceId}`,
         (event) => {
           term.write(event.payload);
-        }
+        },
       );
 
       const exitUnlisten = await listen(`pty-exit-${instanceId}`, () => {
