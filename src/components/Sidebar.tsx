@@ -37,10 +37,12 @@ export function Sidebar({
               onClick={() => onSelect(instance.id)}
               title={`${instance.cwd}\nCmd+${index + 1} to switch`}
             >
-              <span className={`status-indicator ${instance.status}`} />
+              <span className={`status-indicator ${instance.status.status}`} />
               <div className="instance-info">
                 <div className="instance-name">{instance.name}</div>
-                <div className="instance-path">{getShortPath(instance.cwd)}</div>
+                <div className="instance-path">
+                  {getShortPath(instance.cwd)}
+                </div>
               </div>
             </button>
           ))}
