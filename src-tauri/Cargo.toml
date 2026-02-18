@@ -1,0 +1,33 @@
+[package]
+name = "multi-claude"
+version = "0.1.0"
+description = "Run multiple Claude Code instances with status tracking"
+authors = ["Daniel Ma"]
+edition = "2021"
+
+[lib]
+name = "multi_claude_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["devtools"] }
+tauri-plugin-notification = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-single-instance = "2"
+portable-pty = "0.8"
+tokio = { version = "1", features = ["full", "sync"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+parking_lot = "0.12"
+dirs = "5"
+uuid = { version = "1", features = ["v4"] }
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
