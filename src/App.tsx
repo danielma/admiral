@@ -9,7 +9,7 @@ import {
 import { Sidebar } from "./components/Sidebar";
 import { Terminal } from "./components/Terminal";
 import { AddInstance } from "./components/AddInstance";
-import { Instance, InstanceStatus } from "./types";
+import { Instance, InstanceStatus, NotificationRequest } from "./types";
 
 function App() {
   const [instances, setInstances] = useState<Instance[]>([]);
@@ -26,7 +26,7 @@ function App() {
         // Reset status to idle on load (we'll respawn terminals)
         const withIdleStatus = saved.map<Instance>((i) => ({
           ...i,
-          status: { status: "idle" },
+          status: "idle",
         }));
         setInstances(withIdleStatus);
         if (withIdleStatus.length > 0) {
@@ -100,14 +100,18 @@ function App() {
       setInstances((prev) =>
         prev.map((i) => (i.id === instanceId ? { ...i, status } : i)),
       );
+    },
+    [],
+  );
 
-      // Send notification when an instance needs attention
-      if (status.status === "waiting" && notificationPermission) {
+  const handleNotificationRequest = useCallback(
+    (instanceId: string, request: NotificationRequest) => {
+      if (notificationPermission) {
         const instance = instances.find((i) => i.id === instanceId);
         if (instance) {
           sendNotification({
-            title: status.title,
-            body: status.message || `${instance.name} is waiting for input`,
+            title: request.title,
+            body: request.message || `${instance.name} is waiting for input`,
             extra: { instanceId: instance.id },
           });
         }
@@ -122,7 +126,7 @@ function App() {
       id,
       name,
       cwd,
-      status: { status: "idle" },
+      status: "idle",
     };
 
     setInstances((prev) => [...prev, newInstance]);
@@ -136,11 +140,11 @@ function App() {
         cwd,
         command: ["claude"],
       });
-      handleStatusChange(id, { status: "working" });
+      handleStatusChange(id, "working");
       terminalsRef.current.set(id, true);
     } catch (e) {
       console.error("Failed to spawn terminal:", e);
-      handleStatusChange(id, { status: "error" });
+      handleStatusChange(id, "error");
     }
   };
 
@@ -162,7 +166,7 @@ function App() {
 
   const handleTerminalExit = useCallback(
     (instanceId: string) => {
-      handleStatusChange(instanceId, { status: "idle" });
+      handleStatusChange(instanceId, "idle");
       terminalsRef.current.delete(instanceId);
     },
     [handleStatusChange],
@@ -180,10 +184,10 @@ function App() {
               command: ["claude"],
             });
             terminalsRef.current.set(instance.id, true);
-            handleStatusChange(instance.id, { status: "working" });
+            handleStatusChange(instance.id, "working");
           } catch (e) {
             console.error(`Failed to spawn terminal for ${instance.name}:`, e);
-            handleStatusChange(instance.id, { status: "error" });
+            handleStatusChange(instance.id, "error");
           }
         }
       }
@@ -230,6 +234,9 @@ function App() {
                   isActive={instance.id === activeId}
                   onStatusChange={(status) =>
                     handleStatusChange(instance.id, status)
+                  }
+                  onNotificationRequest={(request) =>
+                    handleNotificationRequest(instance.id, request)
                   }
                   onExit={() => handleTerminalExit(instance.id)}
                 />

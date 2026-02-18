@@ -5,12 +5,13 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import "@xterm/xterm/css/xterm.css";
-import { InstanceStatus } from "../types";
+import { InstanceStatus, NotificationRequest } from "../types";
 
 interface TerminalProps {
   instanceId: string;
   isActive: boolean;
   onStatusChange: (status: InstanceStatus) => void;
+  onNotificationRequest: (request: NotificationRequest) => void;
   onExit: () => void;
 }
 
@@ -18,6 +19,7 @@ export function Terminal({
   instanceId,
   isActive,
   onStatusChange,
+  onNotificationRequest,
   onExit,
 }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
@@ -27,12 +29,17 @@ export function Terminal({
 
   // Store callbacks in refs to avoid effect re-runs when they change
   const onStatusChangeRef = useRef(onStatusChange);
+  const onNotificationRequestRef = useRef(onNotificationRequest);
   const onExitRef = useRef(onExit);
 
   // Keep refs updated
   useEffect(() => {
     onStatusChangeRef.current = onStatusChange;
   }, [onStatusChange]);
+
+  useEffect(() => {
+    onNotificationRequestRef.current = onNotificationRequest;
+  }, [onNotificationRequest]);
 
   useEffect(() => {
     onExitRef.current = onExit;
@@ -43,22 +50,25 @@ export function Terminal({
     // or just: notify;message
     const parts = data.split(";");
     if (parts.length >= 1) {
-      const [type, ...rest] = parts[0];
+      const [type, ...rest] = parts;
       if (type === "notify") {
+        // Update status to waiting
+        onStatusChangeRef.current("waiting");
+
+        // Send notification request separately
         switch (rest.length) {
           case 1:
-            onStatusChangeRef.current({ status: "waiting", title: rest[0] });
+            onNotificationRequestRef.current({ title: rest[0] });
             break;
           case 2:
-            onStatusChangeRef.current({
-              status: "waiting",
+            onNotificationRequestRef.current({
               title: rest[0],
               message: rest[1],
             });
             break;
           default:
             throw new Error(
-              `Too many args from claude notification "${JSON.stringify(rest)}`,
+              `Too many args from claude notification "${JSON.stringify(rest)}"`,
             );
         }
       }
@@ -127,7 +137,7 @@ export function Terminal({
     const disposeOnData = term.onData(async (data) => {
       try {
         await invoke("write_to_terminal", { id: instanceId, data });
-        onStatusChangeRef.current({ status: "working" });
+        onStatusChangeRef.current("working");
       } catch (e) {
         console.error("Failed to write to terminal:", e);
       }
