@@ -31,7 +31,5 @@
     "targets": "all",
     "icon": []
   },
-  "plugins": {
-    "notification": {}
-  }
+  "plugins": {}
 }

@@ -25,6 +25,19 @@ export function Terminal({
   const fitAddonRef = useRef<FitAddon | null>(null);
   const listenersRef = useRef<UnlistenFn[]>([]);
 
+  // Store callbacks in refs to avoid effect re-runs when they change
+  const onStatusChangeRef = useRef(onStatusChange);
+  const onExitRef = useRef(onExit);
+
+  // Keep refs updated
+  useEffect(() => {
+    onStatusChangeRef.current = onStatusChange;
+  }, [onStatusChange]);
+
+  useEffect(() => {
+    onExitRef.current = onExit;
+  }, [onExit]);
+
   const parseOsc777 = useCallback(
     (data: string): void => {
       // OSC 777 format from Claude Code: notify;title;message
@@ -34,11 +47,11 @@ export function Terminal({
         const type = parts[0];
         if (type === "notify") {
           // Claude is waiting for input
-          onStatusChange("waiting");
+          onStatusChangeRef.current("waiting");
         }
       }
     },
-    [onStatusChange]
+    []
   );
 
   useEffect(() => {
@@ -104,7 +117,7 @@ export function Terminal({
       try {
         await invoke("write_to_terminal", { id: instanceId, data });
         // User is typing, Claude is working
-        onStatusChange("working");
+        onStatusChangeRef.current("working");
       } catch (e) {
         console.error("Failed to write to terminal:", e);
       }
@@ -121,7 +134,7 @@ export function Terminal({
 
       const exitUnlisten = await listen(`pty-exit-${instanceId}`, () => {
         term.write("\r\n\x1b[90m[Process exited]\x1b[0m\r\n");
-        onExit();
+        onExitRef.current();
       });
 
       listenersRef.current = [outputUnlisten, exitUnlisten];
@@ -155,7 +168,7 @@ export function Terminal({
       xtermRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [instanceId, parseOsc777, onStatusChange, onExit]);
+  }, [instanceId, parseOsc777]);
 
   // Fit terminal when it becomes active
   useEffect(() => {
