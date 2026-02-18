@@ -41,19 +41,27 @@ impl PtyManager {
             })
             .map_err(|e| e.to_string())?;
 
-        let mut cmd = if command.is_empty() {
-            // Default to user's shell
-            let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
-            CommandBuilder::new(shell)
+        // Get user's shell
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+
+        // Build the command to run inside the shell
+        // We explicitly cd to the directory first to ensure correct PWD
+        let cmd_str = if command.is_empty() {
+            // Just start an interactive shell in the directory
+            format!("cd {} && exec $SHELL", shell_escape::escape(cwd.clone().into()))
         } else {
-            let mut cmd = CommandBuilder::new(&command[0]);
-            if command.len() > 1 {
-                cmd.args(&command[1..]);
-            }
-            cmd
+            // Run the command in the directory
+            let escaped_cwd = shell_escape::escape(cwd.clone().into());
+            let escaped_cmd = command.iter()
+                .map(|s| shell_escape::escape(s.clone().into()).to_string())
+                .collect::<Vec<_>>()
+                .join(" ");
+            format!("cd {} && exec {}", escaped_cwd, escaped_cmd)
         };
 
-        cmd.cwd(&cwd);
+        let mut cmd = CommandBuilder::new(&shell);
+        cmd.args(&["-c", &cmd_str]);
+        cmd.cwd(&cwd); // Also set cwd as a fallback
 
         // Set some environment variables
         cmd.env("TERM", "xterm-256color");
